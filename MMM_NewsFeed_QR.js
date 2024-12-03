@@ -1,22 +1,21 @@
 import QRCode from "qrcode";
 
-Module.register("newsfeed", {
-	// Default module config.
+Module.register("MMM_NewsFeed_QR", {
+	// Default module config
 	defaults: {
 		feeds: [
 			{
 				title: "New York Times",
 				url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
-				encoding: "UTF-8" // ISO-8859-1
-			}
+				encoding: "UTF-8", // ISO-8859-1
+			},
 		],
-		showAsList: false,
+		showQRCode: true, // Enable or disable QR codes
+		showDescription: false,
 		showSourceTitle: true,
 		showPublishDate: true,
 		broadcastNewsFeeds: true,
 		broadcastNewsUpdates: true,
-		showDescription: false,
-		showQRCode: false, // New option to enable or disable QR codes
 		showTitleAsUrl: false,
 		wrapTitle: true,
 		wrapDescription: true,
@@ -36,24 +35,24 @@ Module.register("newsfeed", {
 		prohibitedWords: [],
 		scrollLength: 500,
 		logFeedWarnings: false,
-		dangerouslyDisableAutoEscaping: false
+		dangerouslyDisableAutoEscaping: false,
 	},
 
-	// Define required scripts.
+	// Required scripts
 	getScripts() {
 		return ["moment.js"];
 	},
 
-	// Define required styles.
+	// Required styles
 	getStyles() {
-		return ["newsfeed.css"];
+		return ["MMM_NewsFeed_QR.css"];
 	},
 
-	// Define start sequence.
+	// Start module
 	start() {
 		Log.info(`Starting module: ${this.name}`);
 
-		// Set locale.
+		// Set locale
 		moment.locale(config.language);
 
 		this.newsItems = [];
@@ -63,10 +62,9 @@ Module.register("newsfeed", {
 		this.scrollPosition = 0;
 
 		this.registerFeeds();
-		this.isShowingDescription = this.config.showDescription;
 	},
 
-	// Override socket notification handler.
+	// Handle notifications from node_helper
 	socketNotificationReceived(notification, payload) {
 		if (notification === "NEWS_ITEMS") {
 			this.generateFeed(payload);
@@ -83,9 +81,12 @@ Module.register("newsfeed", {
 		} else if (notification === "NEWSFEED_ERROR") {
 			this.error = this.translate(payload.error_type);
 			this.scheduleUpdateInterval();
+		} else if (notification === "QR_CODE_GENERATED") {
+			this.updateQRCode(payload);
 		}
 	},
 
+	// Create the DOM structure
 	getDom() {
 		const wrapper = document.createElement("div");
 
@@ -115,7 +116,6 @@ Module.register("newsfeed", {
 				itemWrapper.appendChild(description);
 			}
 
-			// Conditionally generate QR code
 			if (this.config.showQRCode) {
 				const qrWrapper = document.createElement("div");
 				qrWrapper.className = "news-qr";
@@ -127,7 +127,7 @@ Module.register("newsfeed", {
 					width: 100,
 					height: 100,
 					colorDark: "#000000",
-					colorLight: "#ffffff"
+					colorLight: "#ffffff",
 				}).catch((err) => {
 					Log.error("Error generating QR code:", err);
 				});
@@ -141,13 +141,14 @@ Module.register("newsfeed", {
 		return wrapper;
 	},
 
-	// Rest of the unchanged methods
-	getActiveItemURL() {
-		const item = this.newsItems[this.activeItem];
-		if (item) {
-			return typeof item.url === "string" ? this.getUrlPrefix(item) + item.url : this.getUrlPrefix(item) + item.url.href;
-		} else {
-			return "";
+	updateQRCode(payload) {
+		const { url, qrDataUrl } = payload;
+		const qrWrapper = document.querySelector(`.qr-wrapper[data-url="${url}"]`);
+		if (qrWrapper) {
+			const img = document.createElement("img");
+			img.src = qrDataUrl;
+			qrWrapper.innerHTML = "";
+			qrWrapper.appendChild(img);
 		}
 	},
 
@@ -155,7 +156,7 @@ Module.register("newsfeed", {
 		for (let feed of this.config.feeds) {
 			this.sendSocketNotification("ADD_FEED", {
 				feed: feed,
-				config: this.config
+				config: this.config,
 			});
 		}
 	},
@@ -189,5 +190,5 @@ Module.register("newsfeed", {
 			}
 			this.updateDom(this.config.animationSpeed);
 		}, this.config.updateInterval);
-	}
+	},
 });

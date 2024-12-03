@@ -1,18 +1,34 @@
 const NodeHelper = require("node_helper");
 const Log = require("logger");
 const NewsfeedFetcher = require("./newsfeedfetcher");
+const QRCode = require("qrcode");
 
 module.exports = NodeHelper.create({
 	// Override start method.
-	start () {
+	start() {
 		Log.log(`Starting node helper for: ${this.name}`);
 		this.fetchers = [];
 	},
 
+	generateQRCode: function (text) {
+		QRCode.toDataURL(text, (err, url) => {
+			if (err) {
+				console.error("Error generating QR Code:", err);
+			} else {
+				this.sendSocketNotification("QR_CODE_GENERATED", url);
+			}
+		});
+	},
+
+
 	// Override socketNotificationReceived received.
-	socketNotificationReceived (notification, payload) {
+	socketNotificationReceived(notification, payload) {
 		if (notification === "ADD_FEED") {
 			this.createFetcher(payload.feed, payload.config);
+		}
+
+		if (notification === "GENERATE_QR_CODE") {
+			this.generateQRCode(payload);
 		}
 	},
 
@@ -22,7 +38,7 @@ module.exports = NodeHelper.create({
 	 * @param {object} feed The feed object
 	 * @param {object} config The configuration object
 	 */
-	createFetcher (feed, config) {
+	createFetcher(feed, config) {
 		const url = feed.url || "";
 		const encoding = feed.encoding || "UTF-8";
 		const reloadInterval = feed.reloadInterval || config.reloadInterval || 5 * 60 * 1000;
@@ -69,7 +85,7 @@ module.exports = NodeHelper.create({
 	 * Creates an object with all feed items of the different registered feeds,
 	 * and broadcasts these using sendSocketNotification.
 	 */
-	broadcastFeeds () {
+	broadcastFeeds() {
 		const feeds = {};
 		for (let f in this.fetchers) {
 			feeds[f] = this.fetchers[f].items();
