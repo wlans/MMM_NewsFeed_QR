@@ -1,48 +1,19 @@
 const NodeHelper = require("node_helper");
 const Log = require("logger");
 const NewsfeedFetcher = require("./newsfeedfetcher");
-const QRCode = require("qrcode");
+const QRCode = require("qrcode"); // Import QRCode package
 
 module.exports = NodeHelper.create({
 	// Override start method.
 	start() {
 		Log.log(`Starting node helper for: ${this.name}`);
-		this.fetchers = {}; // Initialize fetchers as an object
+		this.fetchers = [];
 	},
 
-	// Generate QR code image
-	generateQRCode(url) {
-		if (!url) {
-			Log.error("QR Code generation failed: URL is missing or invalid.");
-			return;
-		}
-
-		QRCode.toDataURL(url, (err, imageUrl) => {
-			if (err) {
-				Log.error("Error generating QR Code:", err);
-				return;
-			}
-			this.sendSocketNotification("QR_CODE_IMAGE", { url, imageUrl });
-		});
-	},
-
-	// Override socketNotificationReceived received.
+	// Override socketNotificationReceived.
 	socketNotificationReceived(notification, payload) {
-		if (!payload) {
-			Log.error("Received undefined payload for notification:", notification);
-			return;
-		}
-
 		if (notification === "ADD_FEED") {
-			if (payload.feed && payload.config) {
-				this.createFetcher(payload.feed, payload.config);
-			} else {
-				Log.error("Invalid payload for ADD_FEED:", payload);
-			}
-		}
-
-		if (notification === "GENERATE_QR_CODE") {
-			this.generateQRCode(payload);
+			this.createFetcher(payload.feed, payload.config);
 		}
 	},
 
@@ -53,44 +24,40 @@ module.exports = NodeHelper.create({
 	 * @param {object} config The configuration object
 	 */
 	createFetcher(feed, config) {
-		if (!feed || !feed.url) {
-			Log.error("Feed object is invalid or missing 'url':", feed);
-			this.sendSocketNotification("NEWSFEED_ERROR", { error_type: "MODULE_ERROR_INVALID_FEED" });
-			return;
-		}
-
-		const url = feed.url;
+		const url = feed.url || "";
 		const encoding = feed.encoding || "UTF-8";
 		const reloadInterval = feed.reloadInterval || config.reloadInterval || 5 * 60 * 1000;
 		let useCorsProxy = feed.useCorsProxy;
 		if (useCorsProxy === undefined) useCorsProxy = true;
 
 		try {
-			new URL(url); // Validate URL
+			new URL(url);
 		} catch (error) {
-			Log.error("Newsfeed Error. Malformed newsfeed URL:", url, error);
+			Log.error("Newsfeed Error. Malformed newsfeed url: ", url, error);
 			this.sendSocketNotification("NEWSFEED_ERROR", { error_type: "MODULE_ERROR_MALFORMED_URL" });
 			return;
 		}
 
 		let fetcher;
-		if (!this.fetchers[url]) {
-			Log.log(`Creating new newsfetcher for URL: ${url} - Interval: ${reloadInterval}`);
+		if (typeof this.fetchers[url] === "undefined") {
+			Log.log(`Create new newsfetcher for url: ${url} - Interval: ${reloadInterval}`);
 			fetcher = new NewsfeedFetcher(url, reloadInterval, encoding, config.logFeedWarnings, useCorsProxy);
 
 			fetcher.onReceive(() => {
-				this.broadcastFeeds();
+				this.broadcastFeedsWithQR(); // Updated to include QR generation
 			});
 
 			fetcher.onError((fetcher, error) => {
-				Log.error("Newsfeed Error. Could not fetch newsfeed:", url, error);
-				const errorType = this.checkFetchError(error);
-				this.sendSocketNotification("NEWSFEED_ERROR", { error_type: errorType });
+				Log.error("Newsfeed Error. Could not fetch newsfeed: ", url, error);
+				let error_type = NodeHelper.checkFetchError(error);
+				this.sendSocketNotification("NEWSFEED_ERROR", {
+					error_type
+				});
 			});
 
 			this.fetchers[url] = fetcher;
 		} else {
-			Log.log(`Using existing newsfetcher for URL: ${url}`);
+			Log.log(`Use existing newsfetcher for url: ${url}`);
 			fetcher = this.fetchers[url];
 			fetcher.setReloadInterval(reloadInterval);
 			fetcher.broadcastItems();
@@ -101,32 +68,28 @@ module.exports = NodeHelper.create({
 
 	/**
 	 * Creates an object with all feed items of the different registered feeds,
-	 * and broadcasts these using sendSocketNotification.
+	 * generates QR codes for each item, and broadcasts them using sendSocketNotification.
 	 */
-	broadcastFeeds() {
+	async broadcastFeedsWithQR() {
 		const feeds = {};
-		for (const url in this.fetchers) {
-			feeds[url] = this.fetchers[url].items();
-		}
-		this.sendSocketNotification("NEWS_ITEMS", feeds);
-	},
 
-	/**
-	 * Check and return the appropriate error type for fetch errors.
-	 * @param {Error} error The error object from the fetcher
-	 * @returns {string} Error type
-	 */
-	checkFetchError(error) {
-		if (error.code === "ENOTFOUND") {
-			return "MODULE_ERROR_FEED_NOT_FOUND";
-		} else if (error.code === "ECONNREFUSED") {
-			return "MODULE_ERROR_CONNECTION_REFUSED";
-		} else if (error.response && error.response.status >= 400 && error.response.status < 500) {
-			return "MODULE_ERROR_CLIENT_ERROR";
-		} else if (error.response && error.response.status >= 500) {
-			return "MODULE_ERROR_SERVER_ERROR";
-		} else {
-			return "MODULE_ERROR_UNKNOWN";
+		for (let f in this.fetchers) {
+			const items = this.fetchers[f].items();
+
+			// Generate QR codes for each item
+			feeds[f] = await Promise.all(
+				items.map(async (item) => {
+					try {
+						item.qrCode = await QRCode.toDataURL(item.url); // Generate QR code as a data URL
+					} catch (error) {
+						Log.error("QR Code generation error:", error);
+						item.qrCode = null; // Add null if QR code generation fails
+					}
+					return item;
+				})
+			);
 		}
-	},
+
+		this.sendSocketNotification("NEWS_ITEMS", feeds);
+	}
 });
