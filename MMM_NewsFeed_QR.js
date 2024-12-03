@@ -1,5 +1,3 @@
-import QRCode from "qrcode";
-
 Module.register("MMM_NewsFeed_QR", {
 	// Default module config
 	defaults: {
@@ -14,28 +12,8 @@ Module.register("MMM_NewsFeed_QR", {
 		showDescription: false,
 		showSourceTitle: true,
 		showPublishDate: true,
-		broadcastNewsFeeds: true,
-		broadcastNewsUpdates: true,
-		showTitleAsUrl: false,
-		wrapTitle: true,
-		wrapDescription: true,
-		truncDescription: true,
-		lengthDescription: 400,
-		hideLoading: false,
 		reloadInterval: 5 * 60 * 1000, // every 5 minutes
 		updateInterval: 10 * 1000,
-		animationSpeed: 2.5 * 1000,
-		maxNewsItems: 0, // 0 for unlimited
-		ignoreOldItems: false,
-		ignoreOlderThan: 24 * 60 * 60 * 1000, // 1 day
-		removeStartTags: "",
-		removeEndTags: "",
-		startTags: [],
-		endTags: [],
-		prohibitedWords: [],
-		scrollLength: 500,
-		logFeedWarnings: false,
-		dangerouslyDisableAutoEscaping: false,
 	},
 
 	// Required scripts
@@ -52,14 +30,9 @@ Module.register("MMM_NewsFeed_QR", {
 	start() {
 		Log.info(`Starting module: ${this.name}`);
 
-		// Set locale
-		moment.locale(config.language);
-
 		this.newsItems = [];
 		this.loaded = false;
 		this.error = null;
-		this.activeItem = 0;
-		this.scrollPosition = 0;
 
 		this.registerFeeds();
 	},
@@ -70,19 +43,12 @@ Module.register("MMM_NewsFeed_QR", {
 			this.generateFeed(payload);
 
 			if (!this.loaded) {
-				if (this.config.hideLoading) {
-					this.show();
-				}
-				this.scheduleUpdateInterval();
+				this.loaded = true;
+				this.error = null;
+				this.updateDom();
 			}
-
-			this.loaded = true;
-			this.error = null;
-		} else if (notification === "NEWSFEED_ERROR") {
-			this.error = this.translate(payload.error_type);
-			this.scheduleUpdateInterval();
-		} else if (notification === "QR_CODE_GENERATED") {
-			this.updateQRCode(payload);
+		} else if (notification === "QR_CODE_IMAGE") {
+			this.appendQRCode(payload.url, payload.imageUrl);
 		}
 	},
 
@@ -109,30 +75,15 @@ Module.register("MMM_NewsFeed_QR", {
 			title.innerHTML = item.title;
 			itemWrapper.appendChild(title);
 
-			if (this.config.showDescription) {
-				const description = document.createElement("div");
-				description.className = "news-description";
-				description.innerHTML = item.description;
-				itemWrapper.appendChild(description);
-			}
-
 			if (this.config.showQRCode) {
 				const qrWrapper = document.createElement("div");
 				qrWrapper.className = "news-qr";
-
-				const qrCanvas = document.createElement("canvas");
-				qrWrapper.appendChild(qrCanvas);
-
-				QRCode.toCanvas(qrCanvas, item.url, {
-					width: 100,
-					height: 100,
-					colorDark: "#000000",
-					colorLight: "#ffffff",
-				}).catch((err) => {
-					Log.error("Error generating QR code:", err);
-				});
-
+				qrWrapper.id = `qr_${btoa(item.url)}`; // Use the URL as an identifier
+				qrWrapper.innerHTML = "Generating QR Code...";
 				itemWrapper.appendChild(qrWrapper);
+
+				// Request QR code from backend
+				this.sendSocketNotification("REQUEST_QR_CODE", item.url);
 			}
 
 			wrapper.appendChild(itemWrapper);
@@ -141,54 +92,23 @@ Module.register("MMM_NewsFeed_QR", {
 		return wrapper;
 	},
 
-	updateQRCode(payload) {
-		const { url, qrDataUrl } = payload;
-		const qrWrapper = document.querySelector(`.qr-wrapper[data-url="${url}"]`);
+	appendQRCode(url, imageUrl) {
+		const qrWrapper = document.getElementById(`qr_${btoa(url)}`);
 		if (qrWrapper) {
+			qrWrapper.innerHTML = ""; // Clear any existing content
 			const img = document.createElement("img");
-			img.src = qrDataUrl;
-			qrWrapper.innerHTML = "";
+			img.src = imageUrl; // Set the backend-generated QR code image
 			qrWrapper.appendChild(img);
 		}
 	},
 
 	registerFeeds() {
 		for (let feed of this.config.feeds) {
-			this.sendSocketNotification("ADD_FEED", {
-				feed: feed,
-				config: this.config,
-			});
+			this.sendSocketNotification("ADD_FEED", feed);
 		}
 	},
 
 	generateFeed(feeds) {
-		let newsItems = [];
-		for (let feed in feeds) {
-			const feedItems = feeds[feed];
-			if (this.subscribedToFeed(feed)) {
-				for (let item of feedItems) {
-					item.sourceTitle = this.titleForFeed(feed);
-					if (!(this.config.ignoreOldItems && Date.now() - new Date(item.pubdate) > this.config.ignoreOlderThan)) {
-						newsItems.push(item);
-					}
-				}
-			}
-		}
-		newsItems.sort((a, b) => new Date(b.pubdate) - new Date(a.pubdate));
-		this.newsItems = newsItems;
-	},
-
-	scheduleUpdateInterval() {
-		this.updateDom(this.config.animationSpeed);
-
-		if (this.timer) clearInterval(this.timer);
-
-		this.timer = setInterval(() => {
-			this.activeItem++;
-			if (this.activeItem >= this.newsItems.length) {
-				this.activeItem = 0;
-			}
-			this.updateDom(this.config.animationSpeed);
-		}, this.config.updateInterval);
+		this.newsItems = feeds;
 	},
 });

@@ -10,13 +10,14 @@ module.exports = NodeHelper.create({
 		this.fetchers = [];
 	},
 
-	generateQRCode: function (text) {
-		QRCode.toDataURL(text, (err, url) => {
+	// Generate QR code image
+	generateQRCode(url) {
+		QRCode.toDataURL(url, (err, imageUrl) => {
 			if (err) {
 				console.error("Error generating QR Code:", err);
-			} else {
-				this.sendSocketNotification("QR_CODE_GENERATED", url);
+				return;
 			}
+			this.sendSocketNotification("QR_CODE_IMAGE", { url, imageUrl });
 		});
 	},
 
