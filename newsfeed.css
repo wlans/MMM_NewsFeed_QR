@@ -1,24 +1,60 @@
+/* Full Article iframe styling */
 iframe.newsfeed-fullarticle {
-  width: 100vw;
-
-  /* very large height value to allow scrolling */
-  height: 3000px;
+  width: 100%; /* Use percentage for responsiveness */
+  height: 3000px; /* Keep height for scrolling or consider dynamic adjustments */
+  position: absolute; /* Ensure proper positioning */
   top: 0;
   left: 0;
   border: none;
   z-index: 1;
+  overflow: auto; /* Allow content scrolling within the iframe */
 }
 
+/* Adjusting the bottom bar position for full article */
 .region.bottom.bar.newsfeed-fullarticle {
-  bottom: inherit;
-  top: -90px;
+  position: fixed; /* Ensure the bar stays in place */
+  bottom: auto;
+  top: 0; /* Align to the top if needed */
+  z-index: 2; /* Place above iframe content */
+  background: rgba(255, 255, 255, 0.8); /* Semi-transparent background */
+  padding: 10px; /* Add some spacing inside the bar */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Add subtle shadow for depth */
 }
 
+/* Newsfeed list styling */
 .newsfeed-list {
-  list-style: none;
+  list-style: none; /* Remove bullet points */
+  padding: 0; /* Remove default padding */
+  margin: 0; /* Remove default margin */
 }
 
 .newsfeed-list li {
-  text-align: justify;
-  margin-bottom: 0.5em;
+  text-align: justify; /* Align text for better readability */
+  margin-bottom: 1em; /* Increase spacing between items for better readability */
+  line-height: 1.6; /* Improve line spacing */
+  font-size: 1rem; /* Set a base font size */
+  color: #333; /* Darker text for better contrast */
+}
+
+/* Optional: Hover effect for news items */
+.newsfeed-list li:hover {
+  background-color: rgba(0, 0, 0, 0.05); /* Subtle background change on hover */
+  cursor: pointer; /* Indicate interactivity */
+}
+
+/* Add responsiveness for smaller screens */
+@media (max-width: 768px) {
+  iframe.newsfeed-fullarticle {
+    width: 100%;
+    height: 2000px; /* Adjust height for smaller screens */
+  }
+
+  .region.bottom.bar.newsfeed-fullarticle {
+    top: 0; /* Keep consistent placement */
+    font-size: 0.9rem; /* Adjust font size for smaller screens */
+  }
+
+  .newsfeed-list li {
+    font-size: 0.9rem; /* Reduce font size slightly */
+  }
 }
