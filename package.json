@@ -1,0 +1,11 @@
+{
+  "name": "mmm_newsfeed_qr",
+  "version": "1.0.0",
+  "description": "The `newsfeed` module is one of the default modules of the MagicMirror². This module displays news headlines based on an RSS feed. Scrolling through news headlines happens time-based (`updateInterval`), but can also be controlled by sending news feed specific notifications to the module.",
+  "main": "newsfeed.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
