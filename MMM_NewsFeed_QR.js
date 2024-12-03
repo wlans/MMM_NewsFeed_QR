@@ -1,4 +1,4 @@
-const QRCode = require("qrcode"); // Import the QR code package
+import QRCode from "qrcode";
 
 Module.register("newsfeed", {
 	// Default module config.
